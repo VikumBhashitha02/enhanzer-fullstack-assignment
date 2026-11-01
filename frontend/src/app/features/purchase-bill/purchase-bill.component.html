@@ -1,0 +1,1138 @@
+<div class="purchase-page-layout">
+  <!-- Top Application Navbar -->
+  <header class="app-topbar">
+    <div class="topbar-left">
+      <div class="document-badge">
+        <mat-icon class="doc-icon">receipt_long</mat-icon>
+        <div class="doc-title-group">
+          <h1 class="page-title">Purchase Bill</h1>
+          <span class="page-subtitle">Entry Information for the Purchase Bill</span>
+        </div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="user-greeting">
+        <mat-icon class="user-avatar-icon">account_circle</mat-icon>
+        <span class="user-name">{{ authService.currentUser()?.displayName || 'User' }}</span>
+        <span class="user-company" *ngIf="authService.currentUser()?.companyCode">
+          ({{ authService.currentUser()?.companyCode }})
+        </span>
+      </div>
+      <div class="quick-actions">
+        <button class="icon-tool-btn" (click)="onTopBarNew()" matTooltip="New Entry" aria-label="New">
+          <mat-icon>add_circle_outline</mat-icon>
+        </button>
+        <button class="icon-tool-btn" (click)="onTopBarSearchToggle()" matTooltip="Search Filter" aria-label="Search">
+          <mat-icon>search</mat-icon>
+        </button>
+        <button class="icon-tool-btn" (click)="onTopBarSettings()" matTooltip="Settings" aria-label="Settings">
+          <mat-icon>settings</mat-icon>
+        </button>
+        <button class="logout-btn" (click)="onLogout()" matTooltip="Logout" aria-label="Logout">
+          <mat-icon>logout</mat-icon>
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Document Header Navigation Tabs -->
+  <nav class="document-nav-tabs">
+    <button class="doc-tab-btn" [class.active]="activeTab() === 'header'" (click)="setTab('header')">Header</button>
+    <button class="doc-tab-btn" [class.active]="activeTab() === 'details'" (click)="setTab('details')">Details</button>
+    <button class="doc-tab-btn" [class.active]="activeTab() === 'notes'" (click)="setTab('notes')">Notes</button>
+    <button class="doc-tab-btn" [class.active]="activeTab() === 'documents'" (click)="setTab('documents')">Documents</button>
+  </nav>
+
+  <!-- Search Filter Bar (Collapsible) -->
+  <div class="collapsible-search-bar" *ngIf="isSearchBarVisible()">
+    <div class="search-inner-wrap">
+      <mat-icon class="search-icon">search</mat-icon>
+      <input
+        *ngIf="activeTab() === 'header'"
+        type="text"
+        class="active-module-search-input styled-input"
+        placeholder="Filter Headers by Bill #, Supplier Name, or Reference #..."
+        [value]="headerSearch()"
+        (input)="onHeaderSearchChange($any($event.target).value)"
+      />
+      <input
+        *ngIf="activeTab() === 'details' && activeSubTab() === 'accounts'"
+        type="text"
+        class="active-module-search-input styled-input"
+        placeholder="Filter Accounts by Account Code or Name..."
+        [value]="accountSearch()"
+        (input)="onAccountSearchChange($any($event.target).value)"
+      />
+      <input
+        *ngIf="activeTab() === 'details' && activeSubTab() === 'taxes'"
+        type="text"
+        class="active-module-search-input styled-input"
+        placeholder="Filter Taxes by Tax Code or Name..."
+        [value]="taxSearch()"
+        (input)="onTaxSearchChange($any($event.target).value)"
+      />
+      <input
+        *ngIf="activeTab() === 'details' && activeSubTab() === 'items'"
+        type="text"
+        class="active-module-search-input styled-input"
+        placeholder="Quick search/filter item catalog..."
+        [value]="billForm.get('item')?.value || ''"
+        (input)="billForm.patchValue({ item: $any($event.target).value })"
+      />
+      <input
+        *ngIf="activeTab() === 'notes'"
+        type="text"
+        class="active-module-search-input styled-input"
+        placeholder="Filter Notes by Title, Category, or Description..."
+        [value]="noteSearch()"
+        (input)="onNoteSearchChange($any($event.target).value)"
+      />
+      <input
+        *ngIf="activeTab() === 'documents'"
+        type="text"
+        class="active-module-search-input styled-input"
+        placeholder="Filter Documents by File Name..."
+        [value]="documentSearch()"
+        (input)="onDocumentSearchChange($any($event.target).value)"
+      />
+      <button class="clear-search-btn" (click)="onTopBarSearchToggle()" matTooltip="Close Filter">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <!-- Global Feedback Notifications -->
+  <div class="alerts-wrapper" *ngIf="successMessage || errorMessage">
+    <div class="alert-banner alert-success" *ngIf="successMessage">
+      <mat-icon>check_circle</mat-icon>
+      <span>{{ successMessage }}</span>
+      <button class="alert-close-btn" (click)="clearAlerts()"><mat-icon>close</mat-icon></button>
+    </div>
+    <div class="alert-banner alert-danger" *ngIf="errorMessage">
+      <mat-icon>error</mat-icon>
+      <span>{{ errorMessage }}</span>
+      <button class="alert-close-btn" (click)="clearAlerts()"><mat-icon>close</mat-icon></button>
+    </div>
+  </div>
+
+  <!-- Main Unified Work Area -->
+  <div class="main-work-area">
+    <!-- Left Section: Content of Active Tab -->
+    <div class="content-left-panel">
+
+      <!-- ======================= TAB 1: DETAILS ======================= -->
+      <ng-container *ngIf="activeTab() === 'details'">
+        <!-- Sub Tabs: Items / Accounts / Taxes -->
+        <div class="sub-tabs-bar">
+          <button class="sub-tab-btn" [class.active]="activeSubTab() === 'items'" (click)="setSubTab('items')">Items</button>
+          <button class="sub-tab-btn" [class.active]="activeSubTab() === 'accounts'" (click)="setSubTab('accounts')">Accounts</button>
+          <button class="sub-tab-btn" [class.active]="activeSubTab() === 'taxes'" (click)="setSubTab('taxes')">Taxes</button>
+        </div>
+
+        <!-- 1.A: SUB-TAB ITEMS (PRESERVED COMPLETE FRUIT FORM & TABLE) -->
+        <ng-container *ngIf="activeSubTab() === 'items'">
+          <!-- Batch loading error banner -->
+          <div class="alert-banner alert-warning" *ngIf="locationLoadError()">
+            <mat-icon>warning</mat-icon>
+            <span>{{ locationLoadError() }}</span>
+            <button (click)="loadLocationsFromDatabase()" class="retry-link-btn">Retry</button>
+          </div>
+
+          <!-- Item Entry Form Card -->
+          <section class="form-entry-card">
+            <form [formGroup]="billForm" (ngSubmit)="onAddItem()" class="bill-grid-form" novalidate>
+              <!-- Row 1: Item Autocomplete & Batch Dropdown -->
+              <div class="form-row row-selectors">
+                <!-- Item Field with Autocomplete -->
+                <div class="form-field-wrapper field-item">
+                  <label for="itemInput" class="field-label">Item <span class="required">*</span></label>
+                  <div class="input-with-icon">
+                    <input
+                      id="itemInput"
+                      type="text"
+                      placeholder="Select Fruit Item..."
+                      formControlName="item"
+                      [matAutocomplete]="auto"
+                      class="styled-input"
+                      [class.is-invalid]="(billForm.get('item')?.touched || formSubmitAttempted) && billForm.get('item')?.invalid"
+                    />
+                    <mat-icon class="input-trailing-icon">search</mat-icon>
+                  </div>
+                  <mat-autocomplete #auto="matAutocomplete">
+                    @for (item of filteredItems(); track item) {
+                      <mat-option [value]="item">
+                        {{ item }}
+                      </mat-option>
+                    }
+                    @if (filteredItems().length === 0) {
+                      <mat-option disabled>
+                        No allowed fruit found
+                      </mat-option>
+                    }
+                  </mat-autocomplete>
+                  @if ((billForm.get('item')?.touched || formSubmitAttempted) && billForm.get('item')?.hasError('required')) {
+                    <span class="field-error">Item is required.</span>
+                  }
+                  @if (billForm.get('item')?.hasError('invalidItem')) {
+                    <span class="field-error">Must be one of the 7 allowed items (Mango, Apple, etc.)</span>
+                  }
+                </div>
+
+                <!-- Batch Dropdown populated from SQL Server Location_Details -->
+                <div class="form-field-wrapper field-batch">
+                  <label for="batchSelect" class="field-label">Batch <span class="required">*</span></label>
+                  <div class="select-container">
+                    @if (isLoadingLocations()) {
+                      <div class="loading-locations-indicator">
+                        <mat-spinner diameter="18"></mat-spinner>
+                        <span>Loading batches from database...</span>
+                      </div>
+                    } @else {
+                      <select
+                        id="batchSelect"
+                        formControlName="batch"
+                        class="styled-select"
+                        [class.is-invalid]="(billForm.get('batch')?.touched || formSubmitAttempted) && billForm.get('batch')?.invalid"
+                      >
+                        <option value="" disabled>Select Batch (Location)...</option>
+                        @for (loc of locations(); track loc.locationCode) {
+                          <option [value]="loc.locationName">
+                            {{ loc.locationName }} ({{ loc.locationCode }})
+                          </option>
+                        }
+                      </select>
+                    }
+                  </div>
+                  @if ((billForm.get('batch')?.touched || formSubmitAttempted) && billForm.get('batch')?.hasError('required')) {
+                    <span class="field-error">Batch is required.</span>
+                  }
+                </div>
+              </div>
+
+              <!-- Row 2: Standard Cost, Standard Price, Margin %, Qty, Free Qty, Discount % -->
+              <div class="form-row row-numerics">
+                <!-- Standard Cost -->
+                <div class="form-field-wrapper">
+                  <label for="stdCost" class="field-label">Standard Cost</label>
+                  <input
+                    id="stdCost"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    formControlName="standardCost"
+                    class="styled-input text-right"
+                  />
+                  @if (billForm.get('standardCost')?.hasError('min')) {
+                    <span class="field-error">Cost &ge; 0</span>
+                  }
+                </div>
+
+                <!-- Standard Price -->
+                <div class="form-field-wrapper">
+                  <label for="stdPrice" class="field-label">Standard Price</label>
+                  <input
+                    id="stdPrice"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    formControlName="standardPrice"
+                    class="styled-input text-right"
+                  />
+                  @if (billForm.get('standardPrice')?.hasError('min')) {
+                    <span class="field-error">Price &ge; 0</span>
+                  }
+                </div>
+
+                <!-- Margin % Display -->
+                <div class="form-field-wrapper">
+                  <label class="field-label">Margin %</label>
+                  <div class="styled-input readonly-input text-right" [class.negative]="computedMargin() < 0">
+                    {{ computedMargin() | number:'1.2-2' }}%
+                  </div>
+                </div>
+
+                <!-- Quantity -->
+                <div class="form-field-wrapper">
+                  <label for="qtyInput" class="field-label">Quantity <span class="required">*</span></label>
+                  <input
+                    id="qtyInput"
+                    type="number"
+                    min="1"
+                    step="1"
+                    formControlName="quantity"
+                    class="styled-input text-right"
+                    [class.is-invalid]="(billForm.get('quantity')?.touched || formSubmitAttempted) && billForm.get('quantity')?.invalid"
+                  />
+                  @if ((billForm.get('quantity')?.touched || formSubmitAttempted) && billForm.get('quantity')?.hasError('required')) {
+                    <span class="field-error">Required</span>
+                  }
+                  @if (billForm.get('quantity')?.hasError('min')) {
+                    <span class="field-error">Qty &ge; 1</span>
+                  }
+                </div>
+
+                <!-- Free Qty -->
+                <div class="form-field-wrapper">
+                  <label for="freeQtyInput" class="field-label">Free Qty</label>
+                  <input
+                    id="freeQtyInput"
+                    type="number"
+                    min="0"
+                    step="1"
+                    formControlName="freeQty"
+                    class="styled-input text-right"
+                  />
+                </div>
+
+                <!-- Discount % -->
+                <div class="form-field-wrapper">
+                  <label for="discountInput" class="field-label">Discount %</label>
+                  <input
+                    id="discountInput"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    formControlName="discountPercentage"
+                    class="styled-input text-right"
+                    [class.is-invalid]="billForm.get('discountPercentage')?.invalid"
+                  />
+                  @if (billForm.get('discountPercentage')?.hasError('min') || billForm.get('discountPercentage')?.hasError('max')) {
+                    <span class="field-error">0 - 100%</span>
+                  }
+                </div>
+              </div>
+
+              <!-- Row 3: Totals & Add Button (Exact Original Layout) -->
+              <div class="form-row row-totals-action">
+                <div class="calculated-preview-box">
+                  <div class="preview-item">
+                    <span class="preview-label">Row Total Cost</span>
+                    <span class="preview-value cost-value">Rs. {{ calculatedPreview().totalCost | number:'1.2-2' }}</span>
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Row Total Selling</span>
+                    <span class="preview-value selling-value">Rs. {{ calculatedPreview().totalSelling | number:'1.2-2' }}</span>
+                  </div>
+                  <span class="calculation-formula-hint">Formula: Cost &times; Qty &minus; Discount</span>
+                </div>
+
+                <div class="add-btn-wrapper">
+                  <button type="submit" class="btn-add-item" id="btnAddItem">
+                    <mat-icon>add</mat-icon>
+                    <span>ADD</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <!-- Table of Added Fruit Purchase Items (Exact Original Material Table) -->
+          <section class="table-container">
+            <table mat-table [dataSource]="purchaseItems()" class="purchase-table">
+              <ng-container matColumnDef="item">
+                <th mat-header-cell *matHeaderCellDef>Item</th>
+                <td mat-cell *matCellDef="let row" class="cell-strong">{{ row.item }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="batch">
+                <th mat-header-cell *matHeaderCellDef>Batch</th>
+                <td mat-cell *matCellDef="let row">
+                  <span class="batch-badge-pill">{{ row.batch }}</span>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="standardCost">
+                <th mat-header-cell *matHeaderCellDef class="text-right">Standard Cost</th>
+                <td mat-cell *matCellDef="let row" class="text-right">{{ row.standardCost | number:'1.2-2' }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="standardPrice">
+                <th mat-header-cell *matHeaderCellDef class="text-right">Standard Price</th>
+                <td mat-cell *matCellDef="let row" class="text-right">{{ row.standardPrice | number:'1.2-2' }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="margin">
+                <th mat-header-cell *matHeaderCellDef class="text-right">Margin %</th>
+                <td mat-cell *matCellDef="let row" class="text-right">{{ row.margin | number:'1.2-2' }}%</td>
+              </ng-container>
+
+              <ng-container matColumnDef="quantity">
+                <th mat-header-cell *matHeaderCellDef class="text-right">Quantity</th>
+                <td mat-cell *matCellDef="let row" class="text-right font-bold">{{ row.quantity }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="freeQty">
+                <th mat-header-cell *matHeaderCellDef class="text-right">Free Qty</th>
+                <td mat-cell *matCellDef="let row" class="text-right">{{ row.freeQty || 0 }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="discountPercentage">
+                <th mat-header-cell *matHeaderCellDef class="text-right">Discount</th>
+                <td mat-cell *matCellDef="let row" class="text-right">{{ row.discountPercentage }}%</td>
+              </ng-container>
+
+              <ng-container matColumnDef="totalCost">
+                <th mat-header-cell *matHeaderCellDef class="text-right">Total Cost</th>
+                <td mat-cell *matCellDef="let row" class="text-right cell-cost">{{ row.totalCost | number:'1.2-2' }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="totalSelling">
+                <th mat-header-cell *matHeaderCellDef class="text-right">Total Selling</th>
+                <td mat-cell *matCellDef="let row" class="text-right cell-selling">{{ row.totalSelling | number:'1.2-2' }}</td>
+              </ng-container>
+
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef class="text-center">Action</th>
+                <td mat-cell *matCellDef="let row" class="text-center">
+                  <button
+                    type="button"
+                    (click)="onRemoveItem(row.id)"
+                    class="remove-row-btn"
+                    matTooltip="Remove Item"
+                    aria-label="Remove item"
+                  >
+                    <mat-icon>delete_outline</mat-icon>
+                  </button>
+                </td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+
+              <tr class="mat-row" *matNoDataRow>
+                <td class="mat-cell empty-table-cell" [attr.colspan]="displayedColumns.length">
+                  <div class="empty-state-container">
+                    <mat-icon class="empty-icon">shopping_cart</mat-icon>
+                    <p>No items added yet. Choose an item, specify batch and quantities, and click <strong>ADD</strong>.</p>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </section>
+        </ng-container>
+
+        <!-- 1.B: SUB-TAB ACCOUNTS -->
+        <ng-container *ngIf="activeSubTab() === 'accounts'">
+          <div class="erp-section-card">
+            <div class="erp-card-header">
+              <div class="card-title-group">
+                <h3 class="card-title">Accounts Management</h3>
+                <span class="card-subtitle">Expense allocations, cost center codes, and general ledger mapping</span>
+              </div>
+              <div class="card-actions-group">
+                <span class="record-counter-pill">{{ accounts().length }} Accounts</span>
+                <button class="erp-btn-primary" (click)="openCreateAccountModal()">
+                  <mat-icon>add</mat-icon>
+                  <span>New Account</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table class="erp-data-table">
+                <thead>
+                  <tr>
+                    <th>Account Code</th>
+                    <th>Account Name</th>
+                    <th>Account Type</th>
+                    <th class="text-right">Balance</th>
+                    <th>Status</th>
+                    <th class="text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let a of accounts()">
+                    <td class="font-bold text-code">{{ a.accountCode }}</td>
+                    <td>{{ a.accountName }}</td>
+                    <td><span class="status-pill status-info">{{ a.accountType }}</span></td>
+                    <td class="text-right font-bold">Rs. {{ a.balance | number:'1.2-2' }}</td>
+                    <td>
+                      <span class="status-pill" [class.status-active]="a.status === 'Active'" [class.status-inactive]="a.status !== 'Active'">
+                        {{ a.status }}
+                      </span>
+                    </td>
+                    <td class="text-center actions-cell">
+                      <button class="action-btn action-edit" (click)="openEditAccountModal(a)" matTooltip="Edit Account">
+                        <mat-icon>edit</mat-icon>
+                      </button>
+                      <button class="action-btn action-delete" (click)="promptDelete('account', a.id, a.accountName)" matTooltip="Delete Account">
+                        <mat-icon>delete_outline</mat-icon>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="empty-table-cell" *ngIf="!isLoadingAccounts() && accounts().length === 0">
+                <div class="empty-state-container">
+                  <mat-icon class="empty-icon">account_balance</mat-icon>
+                  <p>No accounts found matching your filter criteria.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ng-container>
+
+        <!-- 1.C: SUB-TAB TAXES -->
+        <ng-container *ngIf="activeSubTab() === 'taxes'">
+          <div class="erp-section-card">
+            <div class="erp-card-header">
+              <div class="card-title-group">
+                <h3 class="card-title">Taxes Management</h3>
+                <span class="card-subtitle">Statutory VAT, SSCL, customs tariffs, and tax deductions</span>
+              </div>
+              <div class="card-actions-group">
+                <span class="record-counter-pill">{{ taxes().length }} Taxes</span>
+                <button class="erp-btn-primary" (click)="openCreateTaxModal()">
+                  <mat-icon>add</mat-icon>
+                  <span>New Tax</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table class="erp-data-table">
+                <thead>
+                  <tr>
+                    <th>Tax Code</th>
+                    <th>Tax Name</th>
+                    <th class="text-right">Tax Rate (%)</th>
+                    <th>Status</th>
+                    <th class="text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let t of taxes()">
+                    <td class="font-bold text-code">{{ t.taxCode }}</td>
+                    <td>{{ t.taxName }}</td>
+                    <td class="text-right font-bold text-tax">{{ t.taxRate | number:'1.2-2' }}%</td>
+                    <td>
+                      <span class="status-pill" [class.status-active]="t.status === 'Active'" [class.status-inactive]="t.status !== 'Active'">
+                        {{ t.status }}
+                      </span>
+                    </td>
+                    <td class="text-center actions-cell">
+                      <button class="action-btn action-edit" (click)="openEditTaxModal(t)" matTooltip="Edit Tax">
+                        <mat-icon>edit</mat-icon>
+                      </button>
+                      <button class="action-btn action-delete" (click)="promptDelete('tax', t.id, t.taxName)" matTooltip="Delete Tax">
+                        <mat-icon>delete_outline</mat-icon>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="empty-table-cell" *ngIf="!isLoadingTaxes() && taxes().length === 0">
+                <div class="empty-state-container">
+                  <mat-icon class="empty-icon">percent</mat-icon>
+                  <p>No statutory taxes found.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ng-container>
+      </ng-container>
+
+      <!-- ======================= TAB 2: HEADER ======================= -->
+      <ng-container *ngIf="activeTab() === 'header'">
+        <div class="erp-section-card">
+          <div class="erp-card-header">
+            <div class="card-title-group">
+              <h3 class="card-title">Header Management</h3>
+              <span class="card-subtitle">Document billing records, supplier metadata, and document status</span>
+            </div>
+            <div class="card-actions-group">
+              <span class="record-counter-pill">{{ headers().length }} Headers</span>
+              <button class="erp-btn-primary" (click)="openCreateHeaderModal()">
+                <mat-icon>add</mat-icon>
+                <span>New Header</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Document Highlight Banner -->
+          <div class="active-doc-banner" *ngIf="activeDocument()">
+            <div class="banner-title-area">
+              <span class="banner-label">Active Document:</span>
+              <span class="banner-bill-no">{{ activeDocument()?.billNumber }}</span>
+              <span class="status-pill status-active">{{ activeDocument()?.status }}</span>
+            </div>
+            <div class="banner-meta">
+              <span><strong>Supplier:</strong> {{ activeDocument()?.supplierName }}</span>
+              <span><strong>Date:</strong> {{ activeDocument()?.billDate | date:'mediumDate' }}</span>
+              <span><strong>Total:</strong> Rs. {{ activeDocument()?.totalAmount | number:'1.2-2' }}</span>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="erp-data-table">
+              <thead>
+                <tr>
+                  <th>Bill #</th>
+                  <th>Bill Date</th>
+                  <th>Supplier Name</th>
+                  <th>Reference #</th>
+                  <th>Status</th>
+                  <th class="text-right">Total Amount</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let h of headers()" [class.row-highlight]="h.id === activeDocument()?.id">
+                  <td class="font-bold text-code">{{ h.billNumber }}</td>
+                  <td>{{ h.billDate | date:'mediumDate' }}</td>
+                  <td class="font-semibold">{{ h.supplierName }}</td>
+                  <td>{{ h.referenceNumber || '—' }}</td>
+                  <td>
+                    <span class="status-pill" [class.status-active]="h.status === 'Approved'" [class.status-warning]="h.status === 'Draft'" [class.status-info]="h.status === 'Posted'">
+                      {{ h.status }}
+                    </span>
+                  </td>
+                  <td class="text-right font-bold cell-cost">Rs. {{ h.totalAmount | number:'1.2-2' }}</td>
+                  <td class="text-center actions-cell">
+                    <button class="action-btn action-select" (click)="selectActiveHeader(h)" matTooltip="Set as Active Document">
+                      <mat-icon>check_circle_outline</mat-icon>
+                    </button>
+                    <button class="action-btn action-view" (click)="openViewHeaderModal(h)" matTooltip="View Full Details">
+                      <mat-icon>visibility</mat-icon>
+                    </button>
+                    <button class="action-btn action-edit" (click)="openEditHeaderModal(h)" matTooltip="Edit Header">
+                      <mat-icon>edit</mat-icon>
+                    </button>
+                    <button class="action-btn action-delete" (click)="promptDelete('header', h.id, h.billNumber)" matTooltip="Delete Header">
+                      <mat-icon>delete_outline</mat-icon>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="empty-table-cell" *ngIf="!isLoadingHeaders() && headers().length === 0">
+              <div class="empty-state-container">
+                <mat-icon class="empty-icon">view_headline</mat-icon>
+                <p>No headers found matching criteria.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- ======================= TAB 3: NOTES ======================= -->
+      <ng-container *ngIf="activeTab() === 'notes'">
+        <div class="erp-section-card">
+          <div class="erp-card-header">
+            <div class="card-title-group">
+              <h3 class="card-title">Bill Notes & Audit Trail</h3>
+              <span class="card-subtitle">Delivery logs, quality inspection reports, and vendor correspondence</span>
+            </div>
+            <div class="card-actions-group">
+              <span class="record-counter-pill">{{ notes().length }} Notes</span>
+              <button class="erp-btn-primary" (click)="openCreateNoteModal()">
+                <mat-icon>add</mat-icon>
+                <span>New Note</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="notes-grid-layout" *ngIf="!isLoadingNotes() && notes().length > 0">
+            <div class="erp-note-card" *ngFor="let n of notes()">
+              <div class="note-top-row">
+                <span class="status-pill status-info">{{ n.category }}</span>
+                <span class="note-date-text">{{ n.createdAtUtc | date:'short' }}</span>
+              </div>
+              <h4 class="note-heading">{{ n.title }}</h4>
+              <p class="note-preview-text">{{ n.description }}</p>
+              <div class="note-bottom-row">
+                <span class="note-author-pill">
+                  <mat-icon>person</mat-icon>
+                  <span>{{ n.createdBy || 'Staff' }}</span>
+                </span>
+                <div class="note-btn-actions">
+                  <button class="action-btn action-view" (click)="openViewNoteModal(n)" matTooltip="View Full Note">
+                    <mat-icon>visibility</mat-icon>
+                  </button>
+                  <button class="action-btn action-edit" (click)="openEditNoteModal(n)" matTooltip="Edit Note">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                  <button class="action-btn action-delete" (click)="promptDelete('note', n.id, n.title)" matTooltip="Delete Note">
+                    <mat-icon>delete_outline</mat-icon>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="empty-table-cell" *ngIf="!isLoadingNotes() && notes().length === 0">
+            <div class="empty-state-container">
+              <mat-icon class="empty-icon">description</mat-icon>
+              <p>No notes logged for this purchase bill.</p>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- ======================= TAB 4: DOCUMENTS ======================= -->
+      <ng-container *ngIf="activeTab() === 'documents'">
+        <div class="erp-section-card">
+          <div class="erp-card-header">
+            <div class="card-title-group">
+              <h3 class="card-title">Documents & Attachments</h3>
+              <span class="card-subtitle">Invoices, packing slips, customs declarations, and supplier certificates</span>
+            </div>
+            <div class="card-actions-group">
+              <span class="record-counter-pill">{{ documents().length }} Documents</span>
+              <input
+                type="file"
+                id="documentFileInput"
+                style="display: none"
+                (change)="onFileSelected($event)"
+                accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx,.txt,.csv"
+              />
+              <button class="erp-btn-primary" (click)="onTopBarNew()" [disabled]="isUploading()">
+                <mat-icon>cloud_upload</mat-icon>
+                <span>Upload Document</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Upload Dropzone Hero Area -->
+          <div class="upload-dropzone-box" (click)="onTopBarNew()">
+            <mat-icon class="dropzone-cloud-icon">upload_file</mat-icon>
+            <div class="dropzone-text-group">
+              <span class="dropzone-prompt">Click to select files or drag & drop</span>
+              <span class="dropzone-hint">Supported formats: PDF, PNG, JPG, DOCX, XLSX, CSV, TXT (Maximum file size: 10 MB)</span>
+            </div>
+          </div>
+
+          <div class="upload-status-indicator" *ngIf="isUploading()">
+            <mat-spinner diameter="18"></mat-spinner>
+            <span>Uploading file securely to backend storage...</span>
+          </div>
+
+          <div class="table-container">
+            <table class="erp-data-table">
+              <thead>
+                <tr>
+                  <th>File Name</th>
+                  <th>Type</th>
+                  <th class="text-right">File Size</th>
+                  <th>Uploaded By</th>
+                  <th>Uploaded Date</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let doc of documents()">
+                  <td class="font-bold text-code file-cell">
+                    <mat-icon class="file-icon-lead">insert_drive_file</mat-icon>
+                    <span>{{ doc.fileName }}</span>
+                  </td>
+                  <td><span class="status-pill status-info">{{ doc.contentType }}</span></td>
+                  <td class="text-right">{{ formatFileSize(doc.fileSizeBytes) }}</td>
+                  <td>{{ doc.uploadedBy || 'User' }}</td>
+                  <td>{{ doc.uploadedAtUtc | date:'medium' }}</td>
+                  <td class="text-center actions-cell">
+                    <button class="action-btn action-download" (click)="downloadDocument(doc)" matTooltip="Download Attachment">
+                      <mat-icon>download</mat-icon>
+                    </button>
+                    <button class="action-btn action-delete" (click)="promptDelete('document', doc.id, doc.fileName)" matTooltip="Delete Document">
+                      <mat-icon>delete_outline</mat-icon>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="empty-table-cell" *ngIf="!isLoadingDocuments() && documents().length === 0">
+              <div class="empty-state-container">
+                <mat-icon class="empty-icon">folder_open</mat-icon>
+                <p>No documents attached to this purchase bill.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+
+    </div>
+
+    <!-- Right Sidebar: Item Summary & Financial Summary (Unified across all document tabs) -->
+    <aside class="content-right-sidebar">
+      <div class="summary-card">
+        <div class="summary-header">
+          <mat-icon class="summary-icon">summarize</mat-icon>
+          <h2 class="summary-title">Summary</h2>
+        </div>
+
+        <!-- Document Context Information -->
+        <div class="summary-block doc-context-block">
+          <div class="block-title-row">
+            <span class="block-title">Document Reference</span>
+            <span class="status-pill status-active">{{ activeDocument()?.status || 'Draft' }}</span>
+          </div>
+          <div class="summary-line">
+            <span class="metric-label">Bill Number:</span>
+            <span class="metric-value font-bold text-code">{{ activeDocument()?.billNumber || 'BILL-2026-001' }}</span>
+          </div>
+          <div class="summary-line">
+            <span class="metric-label">Supplier:</span>
+            <span class="metric-value font-semibold">{{ activeDocument()?.supplierName || 'Fresh Farms Produce Ltd' }}</span>
+          </div>
+          <div class="summary-line">
+            <span class="metric-label">Bill Date:</span>
+            <span class="metric-value">{{ (activeDocument()?.billDate | date:'mediumDate') || 'Nov 1, 2026' }}</span>
+          </div>
+        </div>
+
+        <div class="summary-divider"></div>
+
+        <!-- Item Summary Section explicitly specified by Assignment -->
+        <div class="summary-block">
+          <div class="block-title-row">
+            <span class="block-title">Item Summary</span>
+            <mat-icon class="info-badge" matTooltip="Derived dynamically from item table">info</mat-icon>
+          </div>
+          <div class="summary-line">
+            <span class="metric-label">Total Items:</span>
+            <span class="metric-value font-bold" id="totalItemsSummary">{{ summary().totalItems }}</span>
+          </div>
+          <div class="summary-line">
+            <span class="metric-label">Total Qty:</span>
+            <span class="metric-value font-bold" id="totalQtySummary">{{ summary().totalQuantity }}</span>
+          </div>
+        </div>
+
+        <div class="summary-divider"></div>
+
+        <!-- Financial Summary Section -->
+        <div class="summary-block">
+          <div class="block-title-row">
+            <span class="block-title">Financial Summary</span>
+          </div>
+          <div class="summary-line">
+            <span class="metric-label">Gross Total:</span>
+            <span class="metric-value">{{ summary().grossTotal | number:'1.2-2' }}</span>
+          </div>
+          <div class="summary-line">
+            <span class="metric-label">Item Discount:</span>
+            <span class="metric-value text-discount">-{{ summary().totalDiscount | number:'1.2-2' }}</span>
+          </div>
+          <div class="summary-line">
+            <span class="metric-label">Net Total Cost:</span>
+            <span class="metric-value font-bold">{{ summary().netTotalCost | number:'1.2-2' }}</span>
+          </div>
+          <div class="summary-line">
+            <span class="metric-label">Total Selling Value:</span>
+            <span class="metric-value">{{ summary().netTotalSelling | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <!-- Net Total Highlight Banner -->
+        <div class="net-total-banner">
+          <span class="net-total-label">Net Total</span>
+          <span class="net-total-amount">Rs. {{ summary().netTotalCost | number:'1.2-2' }}</span>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ================================= MODALS ================================= -->
+
+  <!-- 1. Header Create / Edit Modal -->
+  <div class="modal-backdrop" *ngIf="isHeaderModalOpen()">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>{{ editingHeader() ? 'Edit Purchase Bill Header' : 'New Purchase Bill Header' }}</h3>
+        <button class="modal-close-btn" (click)="closeHeaderModal()"><mat-icon>close</mat-icon></button>
+      </div>
+      <form [formGroup]="headerForm" (ngSubmit)="saveHeader()" class="modal-body">
+        <div class="form-grid-2">
+          <div class="form-field-wrapper">
+            <label class="field-label">Bill Number <span class="required">*</span></label>
+            <input type="text" formControlName="billNumber" class="styled-input" placeholder="e.g. BILL-2026-001" />
+            <span class="field-error" *ngIf="headerForm.get('billNumber')?.touched && headerForm.get('billNumber')?.hasError('required')">Required</span>
+          </div>
+          <div class="form-field-wrapper">
+            <label class="field-label">Bill Date <span class="required">*</span></label>
+            <input type="date" formControlName="billDate" class="styled-input" />
+            <span class="field-error" *ngIf="headerForm.get('billDate')?.touched && headerForm.get('billDate')?.hasError('required')">Required</span>
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-field-wrapper">
+            <label class="field-label">Supplier Name <span class="required">*</span></label>
+            <input type="text" formControlName="supplierName" class="styled-input" placeholder="e.g. Fresh Farms Produce Ltd" />
+            <span class="field-error" *ngIf="headerForm.get('supplierName')?.touched && headerForm.get('supplierName')?.hasError('required')">Required</span>
+          </div>
+          <div class="form-field-wrapper">
+            <label class="field-label">Reference Number</label>
+            <input type="text" formControlName="referenceNumber" class="styled-input" placeholder="e.g. REF-2026-09" />
+          </div>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-field-wrapper">
+            <label class="field-label">Status <span class="required">*</span></label>
+            <select formControlName="status" class="styled-select">
+              <option value="Draft">Draft</option>
+              <option value="Approved">Approved</option>
+              <option value="Posted">Posted</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="form-field-wrapper">
+            <label class="field-label">Total Amount (Rs.) <span class="required">*</span></label>
+            <input type="number" step="0.01" min="0" formControlName="totalAmount" class="styled-input text-right" />
+            <span class="field-error" *ngIf="headerForm.get('totalAmount')?.hasError('min')">Must be &ge; 0</span>
+          </div>
+        </div>
+
+        <div class="form-field-wrapper">
+          <label class="field-label">Remarks / Notes</label>
+          <textarea formControlName="remarks" class="styled-input styled-textarea" rows="3" placeholder="Additional billing comments..."></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" (click)="closeHeaderModal()">Cancel</button>
+          <button type="submit" class="erp-btn-primary">{{ editingHeader() ? 'Update Header' : 'Save Header' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. View Header Modal -->
+  <div class="modal-backdrop" *ngIf="isViewHeaderModalOpen() && selectedHeader()">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Header Details: {{ selectedHeader()?.billNumber }}</h3>
+        <button class="modal-close-btn" (click)="closeViewHeaderModal()"><mat-icon>close</mat-icon></button>
+      </div>
+      <div class="modal-body view-details-grid">
+        <div class="detail-row"><span class="detail-label">Bill Number:</span> <span class="detail-val font-bold text-code">{{ selectedHeader()?.billNumber }}</span></div>
+        <div class="detail-row"><span class="detail-label">Bill Date:</span> <span class="detail-val">{{ selectedHeader()?.billDate | date:'fullDate' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Supplier Name:</span> <span class="detail-val font-semibold">{{ selectedHeader()?.supplierName }}</span></div>
+        <div class="detail-row"><span class="detail-label">Reference Number:</span> <span class="detail-val">{{ selectedHeader()?.referenceNumber || 'N/A' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Status:</span> <span class="detail-val status-pill status-active">{{ selectedHeader()?.status }}</span></div>
+        <div class="detail-row"><span class="detail-label">Total Amount:</span> <span class="detail-val font-bold cell-cost">Rs. {{ selectedHeader()?.totalAmount | number:'1.2-2' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Created By:</span> <span class="detail-val">{{ selectedHeader()?.createdBy || 'System' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Remarks:</span> <span class="detail-val">{{ selectedHeader()?.remarks || 'None' }}</span></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="erp-btn-primary" (click)="closeViewHeaderModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Note Create / Edit Modal -->
+  <div class="modal-backdrop" *ngIf="isNoteModalOpen()">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>{{ editingNote() ? 'Edit Note' : 'New Note' }}</h3>
+        <button class="modal-close-btn" (click)="closeNoteModal()"><mat-icon>close</mat-icon></button>
+      </div>
+      <form [formGroup]="noteForm" (ngSubmit)="saveNote()" class="modal-body">
+        <div class="form-field-wrapper">
+          <label class="field-label">Title <span class="required">*</span></label>
+          <input type="text" formControlName="title" class="styled-input" placeholder="Note summary..." />
+          <span class="field-error" *ngIf="noteForm.get('title')?.touched && noteForm.get('title')?.hasError('required')">Required</span>
+        </div>
+
+        <div class="form-field-wrapper">
+          <label class="field-label">Category <span class="required">*</span></label>
+          <select formControlName="category" class="styled-select">
+            <option value="General">General</option>
+            <option value="Billing">Billing</option>
+            <option value="Quality Inspection">Quality Inspection</option>
+            <option value="Delivery">Delivery</option>
+            <option value="Urgent">Urgent</option>
+          </select>
+        </div>
+
+        <div class="form-field-wrapper">
+          <label class="field-label">Description <span class="required">*</span></label>
+          <textarea formControlName="description" class="styled-input styled-textarea" rows="4" placeholder="Detailed note content..."></textarea>
+          <span class="field-error" *ngIf="noteForm.get('description')?.touched && noteForm.get('description')?.hasError('required')">Required</span>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" (click)="closeNoteModal()">Cancel</button>
+          <button type="submit" class="erp-btn-primary">{{ editingNote() ? 'Update Note' : 'Save Note' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 4. View Note Modal -->
+  <div class="modal-backdrop" *ngIf="isViewNoteModalOpen() && selectedNote()">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Note Details</h3>
+        <button class="modal-close-btn" (click)="closeViewNoteModal()"><mat-icon>close</mat-icon></button>
+      </div>
+      <div class="modal-body view-details-grid">
+        <div class="detail-row"><span class="detail-label">Title:</span> <span class="detail-val font-bold">{{ selectedNote()?.title }}</span></div>
+        <div class="detail-row"><span class="detail-label">Category:</span> <span class="detail-val status-pill status-info">{{ selectedNote()?.category }}</span></div>
+        <div class="detail-row"><span class="detail-label">Created By:</span> <span class="detail-val">{{ selectedNote()?.createdBy || 'Staff' }}</span></div>
+        <div class="detail-row"><span class="detail-label">Created At:</span> <span class="detail-val">{{ selectedNote()?.createdAtUtc | date:'medium' }}</span></div>
+        <div class="detail-row full-width"><span class="detail-label">Description:</span> <p class="note-desc-text">{{ selectedNote()?.description }}</p></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="erp-btn-primary" (click)="closeViewNoteModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Account Create / Edit Modal -->
+  <div class="modal-backdrop" *ngIf="isAccountModalOpen()">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>{{ editingAccount() ? 'Edit Account' : 'New Account' }}</h3>
+        <button class="modal-close-btn" (click)="closeAccountModal()"><mat-icon>close</mat-icon></button>
+      </div>
+      <form [formGroup]="accountForm" (ngSubmit)="saveAccount()" class="modal-body">
+        <div class="form-grid-2">
+          <div class="form-field-wrapper">
+            <label class="field-label">Account Code <span class="required">*</span></label>
+            <input type="text" formControlName="accountCode" class="styled-input" placeholder="e.g. ACC-5001" />
+            <span class="field-error" *ngIf="accountForm.get('accountCode')?.touched && accountForm.get('accountCode')?.hasError('required')">Required</span>
+          </div>
+          <div class="form-field-wrapper">
+            <label class="field-label">Account Type <span class="required">*</span></label>
+            <select formControlName="accountType" class="styled-select">
+              <option value="Expense">Expense</option>
+              <option value="Asset">Asset</option>
+              <option value="Liability">Liability</option>
+              <option value="Revenue">Revenue</option>
+              <option value="Equity">Equity</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-field-wrapper">
+          <label class="field-label">Account Name <span class="required">*</span></label>
+          <input type="text" formControlName="accountName" class="styled-input" placeholder="e.g. Fruit Inventory Purchase" />
+          <span class="field-error" *ngIf="accountForm.get('accountName')?.touched && accountForm.get('accountName')?.hasError('required')">Required</span>
+        </div>
+
+        <div class="form-grid-2">
+          <div class="form-field-wrapper">
+            <label class="field-label">Balance (Rs.) <span class="required">*</span></label>
+            <input type="number" step="0.01" formControlName="balance" class="styled-input text-right" />
+          </div>
+          <div class="form-field-wrapper">
+            <label class="field-label">Status <span class="required">*</span></label>
+            <select formControlName="status" class="styled-select">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" (click)="closeAccountModal()">Cancel</button>
+          <button type="submit" class="erp-btn-primary">{{ editingAccount() ? 'Update Account' : 'Save Account' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 6. Tax Create / Edit Modal -->
+  <div class="modal-backdrop" *ngIf="isTaxModalOpen()">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>{{ editingTax() ? 'Edit Tax' : 'New Tax' }}</h3>
+        <button class="modal-close-btn" (click)="closeTaxModal()"><mat-icon>close</mat-icon></button>
+      </div>
+      <form [formGroup]="taxForm" (ngSubmit)="saveTax()" class="modal-body">
+        <div class="form-grid-2">
+          <div class="form-field-wrapper">
+            <label class="field-label">Tax Code <span class="required">*</span></label>
+            <input type="text" formControlName="taxCode" class="styled-input" placeholder="e.g. VAT-18" />
+            <span class="field-error" *ngIf="taxForm.get('taxCode')?.touched && taxForm.get('taxCode')?.hasError('required')">Required</span>
+          </div>
+          <div class="form-field-wrapper">
+            <label class="field-label">Tax Rate (%) <span class="required">*</span></label>
+            <input type="number" step="0.1" min="0" max="100" formControlName="taxRate" class="styled-input text-right" />
+            <span class="field-error" *ngIf="taxForm.get('taxRate')?.hasError('min') || taxForm.get('taxRate')?.hasError('max')">0 - 100%</span>
+          </div>
+        </div>
+
+        <div class="form-field-wrapper">
+          <label class="field-label">Tax Name <span class="required">*</span></label>
+          <input type="text" formControlName="taxName" class="styled-input" placeholder="e.g. Value Added Tax" />
+          <span class="field-error" *ngIf="taxForm.get('taxName')?.touched && taxForm.get('taxName')?.hasError('required')">Required</span>
+        </div>
+
+        <div class="form-field-wrapper">
+          <label class="field-label">Status <span class="required">*</span></label>
+          <select formControlName="status" class="styled-select">
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-cancel" (click)="closeTaxModal()">Cancel</button>
+          <button type="submit" class="erp-btn-primary">{{ editingTax() ? 'Update Tax' : 'Save Tax' }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 7. Delete Confirmation Modal -->
+  <div class="modal-backdrop" *ngIf="isDeleteConfirmModalOpen() && deleteTarget()">
+    <div class="modal-dialog modal-dialog-sm">
+      <div class="modal-header">
+        <h3 class="text-danger">Confirm Deletion</h3>
+        <button class="modal-close-btn" (click)="cancelDelete()"><mat-icon>close</mat-icon></button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to permanently delete <strong>"{{ deleteTarget()?.title }}"</strong>?</p>
+        <p class="text-danger-sm">This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-cancel" (click)="cancelDelete()">Cancel</button>
+        <button type="button" class="erp-btn-danger" (click)="executeDelete()">Delete Permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. Settings Modal -->
+  <div class="modal-backdrop" *ngIf="isSettingsModalOpen()">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="settings-title-group">
+          <mat-icon>settings</mat-icon>
+          <h3>User Profile & Application Info</h3>
+        </div>
+        <button class="modal-close-btn" (click)="closeSettingsModal()"><mat-icon>close</mat-icon></button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-card-panel">
+          <div class="settings-field-row">
+            <span class="settings-k">User Display Name:</span>
+            <span class="settings-v font-bold">{{ authService.currentUser()?.displayName || 'Authorized User' }}</span>
+          </div>
+          <div class="settings-field-row">
+            <span class="settings-k">Authorized Company Code:</span>
+            <span class="settings-v font-bold text-code">{{ authService.currentUser()?.companyCode || 'N/A' }}</span>
+          </div>
+          <div class="settings-field-row">
+            <span class="settings-k">Active Session Protocol:</span>
+            <span class="settings-v"><span class="status-pill status-active">Secure HTTP-Only Cookie</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="erp-btn-danger" (click)="onLogout()">
+          <mat-icon>logout</mat-icon>
+          <span>Sign Out</span>
+        </button>
+        <button type="button" class="erp-btn-primary" (click)="closeSettingsModal()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
